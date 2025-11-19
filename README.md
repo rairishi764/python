@@ -931,6 +931,856 @@ first, second, *rest, last = [1, 2, 3, 4, 5]
 print(f"{variable=}")  # Prints: variable=value
 ```
 
+
+# Python Syntax - Additional Topics
+
+## What Was Missing from the Main Cheatsheet
+
 ---
 
-This covers 90% of Python syntax you'll use in practical programming. Keep this as a quick reference!
+## 1. CLASSES & OBJECTS
+
+### Basic Class
+```python
+class Dog:
+    # Class variable (shared by all instances)
+    species = "Canis familiaris"
+    
+    def __init__(self, name, age):
+        # Instance variables
+        self.name = name
+        self.age = age
+    
+    def bark(self):
+        return f"{self.name} says Woof!"
+    
+    def __str__(self):
+        return f"{self.name} is {self.age} years old"
+    
+    def __repr__(self):
+        return f"Dog(name='{self.name}', age={self.age})"
+
+# Create instance
+dog = Dog("Buddy", 3)
+print(dog.bark())
+print(dog)
+```
+
+### Inheritance
+```python
+class Animal:
+    def __init__(self, name):
+        self.name = name
+    
+    def speak(self):
+        pass
+
+class Dog(Animal):
+    def speak(self):
+        return f"{self.name} barks"
+
+class Cat(Animal):
+    def speak(self):
+        return f"{self.name} meows"
+```
+
+### Properties
+```python
+class Circle:
+    def __init__(self, radius):
+        self._radius = radius
+    
+    @property
+    def radius(self):
+        """Getter"""
+        return self._radius
+    
+    @radius.setter
+    def radius(self, value):
+        """Setter"""
+        if value < 0:
+            raise ValueError("Radius must be positive")
+        self._radius = value
+    
+    @property
+    def area(self):
+        """Read-only property"""
+        return 3.14159 * self._radius ** 2
+
+circle = Circle(5)
+print(circle.area)
+circle.radius = 10  # Uses setter
+```
+
+### Static & Class Methods
+```python
+class Math:
+    @staticmethod
+    def add(a, b):
+        """No access to self or cls"""
+        return a + b
+    
+    @classmethod
+    def from_string(cls, string):
+        """Access to class, can create instances"""
+        a, b = map(int, string.split(','))
+        return cls(a, b)
+```
+
+### Magic Methods (Dunder)
+```python
+class Point:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+    
+    def __add__(self, other):
+        return Point(self.x + other.x, self.y + other.y)
+    
+    def __sub__(self, other):
+        return Point(self.x - other.x, self.y - other.y)
+    
+    def __eq__(self, other):
+        return self.x == other.x and self.y == other.y
+    
+    def __lt__(self, other):
+        return self.x < other.x
+    
+    def __len__(self):
+        return int((self.x**2 + self.y**2)**0.5)
+    
+    def __getitem__(self, index):
+        if index == 0: return self.x
+        if index == 1: return self.y
+        raise IndexError()
+    
+    def __str__(self):
+        return f"({self.x}, {self.y})"
+
+p1 = Point(1, 2)
+p2 = Point(3, 4)
+p3 = p1 + p2  # Uses __add__
+print(p1[0])   # Uses __getitem__
+```
+
+### Dataclasses (Python 3.7+)
+```python
+from dataclasses import dataclass, field
+
+@dataclass
+class Person:
+    name: str
+    age: int
+    hobbies: list = field(default_factory=list)
+    
+    def greet(self):
+        return f"Hi, I'm {self.name}"
+
+person = Person("Alice", 30)
+print(person)  # Automatic __str__
+```
+
+---
+
+## 2. DECORATORS
+
+### Function Decorators
+```python
+# Basic decorator
+def timer(func):
+    import time
+    def wrapper(*args, **kwargs):
+        start = time.time()
+        result = func(*args, **kwargs)
+        end = time.time()
+        print(f"{func.__name__} took {end-start:.4f}s")
+        return result
+    return wrapper
+
+@timer
+def slow_function():
+    time.sleep(1)
+    return "Done"
+
+# Same as: slow_function = timer(slow_function)
+
+# Decorator with arguments
+def repeat(times):
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            for _ in range(times):
+                result = func(*args, **kwargs)
+            return result
+        return wrapper
+    return decorator
+
+@repeat(3)
+def greet(name):
+    print(f"Hello {name}")
+```
+
+### functools.wraps
+```python
+from functools import wraps
+
+def my_decorator(func):
+    @wraps(func)  # Preserves original function metadata
+    def wrapper(*args, **kwargs):
+        print("Before")
+        result = func(*args, **kwargs)
+        print("After")
+        return result
+    return wrapper
+```
+
+---
+
+## 3. CONTEXT MANAGERS
+
+### Using Context Managers
+```python
+# File handling (most common)
+with open('file.txt') as f:
+    data = f.read()
+
+# Multiple context managers
+with open('input.txt') as fin, open('output.txt', 'w') as fout:
+    for line in fin:
+        fout.write(line.upper())
+```
+
+### Creating Context Managers
+```python
+# Method 1: Class-based
+class FileManager:
+    def __init__(self, filename, mode):
+        self.filename = filename
+        self.mode = mode
+        self.file = None
+    
+    def __enter__(self):
+        self.file = open(self.filename, self.mode)
+        return self.file
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.file:
+            self.file.close()
+
+with FileManager('file.txt', 'r') as f:
+    data = f.read()
+
+# Method 2: contextlib
+from contextlib import contextmanager
+
+@contextmanager
+def file_manager(filename, mode):
+    try:
+        f = open(filename, mode)
+        yield f
+    finally:
+        f.close()
+
+with file_manager('file.txt', 'r') as f:
+    data = f.read()
+```
+
+---
+
+## 4. GENERATORS & ITERATORS
+
+### Generators (Lazy Evaluation)
+```python
+# Generator function
+def count_up_to(n):
+    count = 1
+    while count <= n:
+        yield count
+        count += 1
+
+for num in count_up_to(5):
+    print(num)  # 1, 2, 3, 4, 5
+
+# Generator expression
+gen = (x**2 for x in range(10))
+
+# Infinite generator
+def fibonacci():
+    a, b = 0, 1
+    while True:
+        yield a
+        a, b = b, a + b
+
+# Use with next()
+fib = fibonacci()
+print(next(fib))  # 0
+print(next(fib))  # 1
+print(next(fib))  # 1
+
+# Generator with send()
+def echo():
+    while True:
+        value = yield
+        print(f"Received: {value}")
+
+gen = echo()
+next(gen)  # Prime the generator
+gen.send("Hello")
+```
+
+### Iterators
+```python
+class Countdown:
+    def __init__(self, start):
+        self.current = start
+    
+    def __iter__(self):
+        return self
+    
+    def __next__(self):
+        if self.current <= 0:
+            raise StopIteration
+        self.current -= 1
+        return self.current + 1
+
+for num in Countdown(5):
+    print(num)  # 5, 4, 3, 2, 1
+```
+
+---
+
+## 5. ADVANCED COMPREHENSIONS
+
+### Nested Comprehensions
+```python
+# 2D matrix
+matrix = [[i*j for j in range(5)] for i in range(5)]
+
+# Flatten nested structure
+nested = [[1, 2], [3, 4], [5, 6]]
+flat = [item for sublist in nested for item in sublist]
+
+# Multiple conditions
+[x for x in range(100) if x % 2 == 0 if x % 3 == 0]
+
+# Nested loops in comprehension
+[(x, y) for x in range(3) for y in range(3) if x != y]
+```
+
+### Dict Comprehension Advanced
+```python
+# Invert dictionary (swap keys/values)
+original = {'a': 1, 'b': 2, 'c': 3}
+inverted = {v: k for k, v in original.items()}
+
+# Filter dictionary
+filtered = {k: v for k, v in original.items() if v > 1}
+
+# Transform values
+squared = {k: v**2 for k, v in original.items()}
+```
+
+---
+
+## 6. IMPORT VARIATIONS
+
+```python
+# Basic import
+import math
+print(math.pi)
+
+# Import specific items
+from math import pi, sqrt
+print(pi)
+
+# Import all (not recommended)
+from math import *
+
+# Import with alias
+import numpy as np
+import pandas as pd
+
+# Import from package
+from package.module import function
+
+# Relative imports (within package)
+from . import sibling
+from .. import parent
+from ..sibling import cousin
+
+# Import module as variable
+import importlib
+module = importlib.import_module('module_name')
+```
+
+---
+
+## 7. SLICING ADVANCED
+
+```python
+# Extended slicing
+my_list = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+
+my_list[::2]      # [0, 2, 4, 6, 8] - every 2nd
+my_list[1::2]     # [1, 3, 5, 7, 9] - every 2nd starting at 1
+my_list[::-1]     # [9, 8, 7, 6, 5, 4, 3, 2, 1, 0] - reverse
+my_list[2:8:2]    # [2, 4, 6] - start:stop:step
+my_list[-3:]      # [7, 8, 9] - last 3 items
+my_list[:-3]      # [0, 1, 2, 3, 4, 5, 6] - all except last 3
+
+# Slice assignment
+my_list[2:5] = [20, 30, 40]  # Replace slice
+my_list[2:5] = []             # Delete slice
+
+# Slice object
+s = slice(1, 5, 2)
+my_list[s]  # Same as my_list[1:5:2]
+```
+
+---
+
+## 8. UNPACKING ADVANCED
+
+```python
+# Basic unpacking
+a, b = 1, 2
+
+# With *rest
+first, *middle, last = [1, 2, 3, 4, 5]
+# first=1, middle=[2,3,4], last=5
+
+# Nested unpacking
+(a, b), (c, d) = [(1, 2), (3, 4)]
+
+# Unpacking in loops
+for x, y in [(1, 2), (3, 4)]:
+    print(x, y)
+
+# Dict unpacking
+d1 = {'a': 1, 'b': 2}
+d2 = {'c': 3, 'd': 4}
+merged = {**d1, **d2}  # {'a': 1, 'b': 2, 'c': 3, 'd': 4}
+
+# List unpacking
+list1 = [1, 2, 3]
+list2 = [4, 5, 6]
+combined = [*list1, *list2]  # [1, 2, 3, 4, 5, 6]
+
+# Function call unpacking
+def func(a, b, c):
+    return a + b + c
+
+args = [1, 2, 3]
+result = func(*args)
+
+kwargs = {'a': 1, 'b': 2, 'c': 3}
+result = func(**kwargs)
+```
+
+---
+
+## 9. OPERATOR MODULE
+
+```python
+import operator
+
+# Arithmetic
+operator.add(1, 2)      # 3
+operator.sub(5, 3)      # 2
+operator.mul(3, 4)      # 12
+operator.truediv(10, 3) # 3.333...
+operator.floordiv(10, 3)# 3
+operator.mod(10, 3)     # 1
+operator.pow(2, 3)      # 8
+
+# Comparison
+operator.eq(1, 1)       # True
+operator.ne(1, 2)       # True
+operator.lt(1, 2)       # True
+operator.le(1, 1)       # True
+operator.gt(2, 1)       # True
+operator.ge(2, 2)       # True
+
+# Logical
+operator.and_(True, False)  # False
+operator.or_(True, False)   # True
+operator.not_(True)         # False
+
+# Item access
+operator.getitem([1, 2, 3], 0)     # 1
+operator.setitem(my_list, 0, 10)   # my_list[0] = 10
+operator.delitem(my_list, 0)       # del my_list[0]
+
+# Attribute access
+operator.attrgetter('name')(obj)   # obj.name
+operator.methodcaller('sort')(list) # list.sort()
+
+# Use in sorting
+from operator import itemgetter
+students = [('Alice', 25), ('Bob', 20)]
+sorted(students, key=itemgetter(1))  # Sort by age
+```
+
+---
+
+## 10. MULTIPLE ASSIGNMENT FORMS
+
+```python
+# Parallel assignment
+x, y = 1, 2
+
+# Chained assignment
+x = y = z = 0
+
+# Augmented assignment
+x += 5
+x *= 2
+
+# Conditional assignment
+x = a if condition else b
+
+# Assignment expressions (walrus := )
+if (n := len(my_list)) > 10:
+    print(f"List has {n} items")
+
+while (line := file.readline()):
+    process(line)
+
+# Multiple targets
+(a, b) = [c, d] = (1, 2)
+```
+
+---
+
+## 11. ENUMERATE VARIATIONS
+
+```python
+# Basic
+for i, val in enumerate(['a', 'b', 'c']):
+    print(i, val)  # 0 a, 1 b, 2 c
+
+# Custom start
+for i, val in enumerate(['a', 'b', 'c'], start=1):
+    print(i, val)  # 1 a, 2 b, 3 c
+
+# With unpacking
+data = [('Alice', 25), ('Bob', 30)]
+for i, (name, age) in enumerate(data):
+    print(f"{i}: {name} is {age}")
+```
+
+---
+
+## 12. ZIP VARIATIONS
+
+```python
+# Basic zip
+names = ['Alice', 'Bob']
+ages = [25, 30]
+for name, age in zip(names, ages):
+    print(name, age)
+
+# Multiple iterables
+for a, b, c in zip(list1, list2, list3):
+    print(a, b, c)
+
+# Unzip
+pairs = [(1, 'a'), (2, 'b'), (3, 'c')]
+numbers, letters = zip(*pairs)
+# numbers = (1, 2, 3)
+# letters = ('a', 'b', 'c')
+
+# zip_longest (from itertools)
+from itertools import zip_longest
+for a, b in zip_longest([1, 2, 3], ['a', 'b'], fillvalue='-'):
+    print(a, b)  # 1 a, 2 b, 3 -
+```
+
+---
+
+## 13. ASSERT & DEBUG
+
+```python
+# Assert statement
+assert condition, "Error message"
+
+# Examples
+assert x > 0, "x must be positive"
+assert len(data) > 0, "Data cannot be empty"
+
+# Disable assertions with python -O
+# or set PYTHONOPTIMIZE=1
+
+# Type assertions (for documentation, not enforced)
+def greet(name: str) -> str:
+    return f"Hello, {name}"
+
+# More complex types
+from typing import List, Dict, Tuple, Optional, Union
+
+def process(items: List[int]) -> Dict[str, int]:
+    return {'count': len(items)}
+
+def find(query: str) -> Optional[str]:
+    return result if result else None
+```
+
+---
+
+## 14. GLOBAL & NONLOCAL
+
+```python
+# Global keyword
+count = 0
+
+def increment():
+    global count
+    count += 1
+
+increment()
+print(count)  # 1
+
+# Nonlocal (for nested functions)
+def outer():
+    count = 0
+    
+    def inner():
+        nonlocal count
+        count += 1
+    
+    inner()
+    return count
+
+print(outer())  # 1
+```
+
+---
+
+## 15. PASS, ELLIPSIS, NONE
+
+```python
+# Pass (do nothing)
+def not_implemented():
+    pass
+
+for i in range(10):
+    if i % 2 == 0:
+        pass  # TODO: handle evens
+    else:
+        print(i)
+
+# Ellipsis (... literal)
+def function_stub():
+    ...
+
+# Can be used as a placeholder
+def multiply(a: int, b: int) -> int:
+    ...
+
+# None
+x = None
+
+def function():
+    return None  # or just: return
+
+# Check for None
+if x is None:
+    print("x is None")
+```
+
+---
+
+## 16. WITH STATEMENTS ADVANCED
+
+```python
+# Suppress exceptions
+from contextlib import suppress
+
+with suppress(FileNotFoundError):
+    os.remove('file.txt')  # No error if file doesn't exist
+
+# Redirect stdout
+from contextlib import redirect_stdout
+import io
+
+f = io.StringIO()
+with redirect_stdout(f):
+    print("Hello")
+output = f.getvalue()  # "Hello\n"
+
+# ExitStack (manage multiple context managers dynamically)
+from contextlib import ExitStack
+
+with ExitStack() as stack:
+    files = [stack.enter_context(open(f)) for f in filenames]
+    # All files closed automatically
+```
+
+---
+
+## 17. MATCH/CASE (Python 3.10+)
+
+```python
+# Structural pattern matching
+def http_status(status):
+    match status:
+        case 200:
+            return "OK"
+        case 404:
+            return "Not Found"
+        case 500 | 501 | 502:
+            return "Server Error"
+        case _:
+            return "Unknown"
+
+# Match with patterns
+match point:
+    case (0, 0):
+        print("Origin")
+    case (0, y):
+        print(f"Y-axis at {y}")
+    case (x, 0):
+        print(f"X-axis at {x}")
+    case (x, y):
+        print(f"Point at {x}, {y}")
+
+# Match with conditions
+match value:
+    case x if x < 0:
+        print("Negative")
+    case x if x == 0:
+        print("Zero")
+    case x if x > 0:
+        print("Positive")
+```
+
+---
+
+## 18. ASYNC/AWAIT (Basics)
+
+```python
+import asyncio
+
+# Async function
+async def fetch_data():
+    await asyncio.sleep(1)  # Simulate IO
+    return "data"
+
+# Run async function
+async def main():
+    result = await fetch_data()
+    print(result)
+
+asyncio.run(main())
+
+# Multiple async tasks
+async def main():
+    results = await asyncio.gather(
+        fetch_data(),
+        fetch_data(),
+        fetch_data()
+    )
+    print(results)
+```
+
+---
+
+## 19. TYPE HINTS (Extended)
+
+```python
+from typing import (
+    List, Dict, Set, Tuple,
+    Optional, Union, Any,
+    Callable, TypeVar, Generic
+)
+
+# Basic types
+def greet(name: str, age: int) -> str:
+    return f"{name} is {age}"
+
+# Collections
+def process(items: List[int]) -> Dict[str, int]:
+    return {'sum': sum(items)}
+
+# Optional (can be None)
+def find(query: str) -> Optional[str]:
+    return result if exists else None
+
+# Union (multiple types)
+def parse(value: Union[int, str]) -> int:
+    return int(value)
+
+# Callable
+def apply(func: Callable[[int, int], int], a: int, b: int) -> int:
+    return func(a, b)
+
+# Generic types
+T = TypeVar('T')
+
+def first(items: List[T]) -> Optional[T]:
+    return items[0] if items else None
+```
+
+---
+
+## 20. COMMONLY MISSED BUILTINS
+
+```python
+# any() and all()
+any([False, False, True])   # True
+all([True, True, False])    # False
+
+# divmod()
+quotient, remainder = divmod(17, 5)  # (3, 2)
+
+# bin(), oct(), hex()
+bin(10)  # '0b1010'
+oct(10)  # '0o12'
+hex(10)  # '0xa'
+
+# chr() and ord()
+chr(65)  # 'A'
+ord('A') # 65
+
+# eval() and exec() (dangerous!)
+eval("2 + 2")           # 4
+exec("x = 2 + 2")       # Creates variable x
+
+# globals() and locals()
+globals()  # Dict of global variables
+locals()   # Dict of local variables
+
+# hasattr(), getattr(), setattr()
+hasattr(obj, 'name')           # Check if attribute exists
+getattr(obj, 'name', 'default') # Get attribute with default
+setattr(obj, 'name', 'value')  # Set attribute
+
+# id()
+id(obj)  # Memory address
+
+# isinstance() and issubclass()
+isinstance(5, int)              # True
+issubclass(bool, int)           # True
+
+# vars()
+vars(obj)  # __dict__ of object
+```
+
+---
+
+## Summary of What's Still Missing
+
+Even this extended list doesn't cover:
+- **Metaclasses** (rarely needed)
+- **Descriptors** (advanced)
+- **Abstract Base Classes** (typing.ABC)
+- **Coroutines** (advanced async)
+- **Memory views** (advanced)
+- **Weak references** (garbage collection)
+- **ctypes** (C interop)
+- **multiprocessing** (parallel processing)
+- **threading** (concurrent programming)
+- **sockets** (network programming)
+- **pickle/json/yaml** (serialization)
+- **argparse** (CLI arguments)
+- **logging** (better than print)
+- **pathlib** (modern file paths)
